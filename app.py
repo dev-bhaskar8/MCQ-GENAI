@@ -92,6 +92,13 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
+        # Check master password
+        master_password = os.getenv('MASTER_PASSWORD')
+        provided_password = request.form.get('master_password')
+        
+        if not provided_password or provided_password != master_password:
+            return jsonify({'error': 'Invalid master password'}), 403
+            
         num_questions = int(request.form.get('num_questions', 25))
         difficulty = request.form.get('difficulty', 'medium')
         input_method = request.form.get('input_method', 'url')

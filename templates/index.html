@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>MCQ Generator</title>
+    <title>MCQ Generator (MCQGENAI)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Add jsPDF library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -63,7 +63,7 @@
     <div class="container mt-5 mb-5">
         <!-- Generator Section -->
         <div id="generator-section">
-            <h1 class="mb-4">MCQ Generator</h1>
+            <h1 class="mb-4">MCQ Generator (𝘔𝘊𝘘 𝘎𝘌𝘕 𝘈𝘐)</h1>
             <form id="url-form" class="mb-4">
                 <div class="mb-3">
                     <label class="form-label">Choose Input Method:</label>
@@ -441,6 +441,13 @@
 
         document.getElementById('url-form').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Prompt for master password
+            const masterPassword = prompt('Please enter the master password:');
+            if (!masterPassword) {
+                return;  // User cancelled the prompt
+            }
+            
             const form = e.target;
             const inputMethod = form.querySelector('input[name="input_method"]:checked').value;
             const numQuestions = form.num_questions.value;
@@ -452,6 +459,7 @@
                 const formData = new FormData();
                 formData.append('num_questions', numQuestions);
                 formData.append('difficulty', difficulty);
+                formData.append('master_password', masterPassword);
                 
                 if (inputMethod === 'url') {
                     formData.append('url', form.url.value);
@@ -471,6 +479,10 @@
                 });
                 
                 const data = await response.json();
+                
+                if (response.status === 403) {
+                    throw new Error('Invalid master password');
+                }
                 
                 if (data.error) {
                     throw new Error(data.error);
