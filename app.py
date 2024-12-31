@@ -161,15 +161,21 @@ def start_test():
     try:
         data = request.get_json()
         questions = data.get('questions', [])
-        difficulty = data.get('difficulty', 'medium')  # Get difficulty from request
+        difficulty = data.get('difficulty', 'medium')
+        reset = data.get('reset', False)
         
         if not questions:
             return jsonify({'error': 'No questions provided'}), 400
             
+        # Clear session if resetting
+        if reset:
+            session.clear()
+            
         # Store in session
         session['questions'] = questions
         session['start_time'] = time.time()
-        session['difficulty'] = difficulty  # Store difficulty in session
+        session['difficulty'] = difficulty
+        session['answers'] = {}  # Initialize/reset answers
         
         return jsonify({'questions': questions})
     except Exception as e:

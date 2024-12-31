@@ -39,10 +39,28 @@
             background-color: #f8d7da;
             border-color: #f5c6cb;
         }
+        .footer {
+            position: relative;
+            text-align: center;
+            font-size: 0.9rem;
+            color: #6c757d;
+            padding: 20px 0;
+            margin-top: 40px;
+        }
+        .heart {
+            color: #007bff;
+            display: inline-block;
+            animation: heartbeat 1.5s ease-in-out infinite;
+        }
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
+    <div class="container mt-5 mb-5">
         <!-- Generator Section -->
         <div id="generator-section">
             <h1 class="mb-4">MCQ Generator</h1>
@@ -92,6 +110,9 @@
                     <div class="progress-bar" role="progressbar" style="width: 0%"></div>
                 </div>
                 <div id="status" class="alert alert-info"></div>
+            </div>
+            <div class="footer">
+                Made with <span class="heart">💙</span> by V
             </div>
         </div>
 
@@ -160,6 +181,9 @@
                 <button id="retry-quiz" class="btn btn-success">Retry This Quiz</button>
                 <button id="download-results" class="btn btn-info">Download Results</button>
                 <button id="restart" class="btn btn-primary">Go Back to Homepage</button>
+            </div>
+            <div class="footer">
+                Made with <span class="heart">💙</span> by V
             </div>
         </div>
     </div>
@@ -567,11 +591,29 @@
         });
 
         // Add event listener for retry button
-        document.getElementById('retry-quiz').addEventListener('click', () => {
+        document.getElementById('retry-quiz').addEventListener('click', async () => {
             if (lastQuestions) {
-                generatedQuestions = lastQuestions;  // Set the generated questions to last questions
-                document.getElementById('results-section').classList.add('hidden');
-                showPreview(lastQuestions.length);  // Show preview section with the same questions
+                // Reset all answers and session data
+                userAnswers = {};
+                try {
+                    // Clear session answers on server
+                    await fetch('/start-test', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            questions: lastQuestions,
+                            difficulty: document.getElementById('difficulty').value,
+                            reset: true
+                        })
+                    });
+                    
+                    generatedQuestions = lastQuestions;  // Set the generated questions to last questions
+                    document.getElementById('results-section').classList.add('hidden');
+                    showPreview(lastQuestions.length);  // Show preview section with the same questions
+                } catch (error) {
+                    console.error('Error resetting quiz:', error);
+                    alert('Error resetting quiz. Please try again.');
+                }
             }
         });
 
