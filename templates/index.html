@@ -11,54 +11,204 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
         .hidden { display: none; }
+        
+        /* Mobile-first base styles */
+        body {
+            font-size: 16px;
+            line-height: 1.6;
+            padding-bottom: 60px; /* Space for footer */
+        }
+
+        .container {
+            padding: 15px;
+            max-width: 100%;
+        }
+
+        /* Title styles */
+        .title-text {
+            font-size: clamp(1.2rem, 4vw, 1.8rem);
+            margin-bottom: 1.5rem;
+            text-align: center;
+            white-space: pre-line;
+            line-height: 1.5;
+        }
+        
+        .title-main {
+            display: block;
+            margin-bottom: 0.5rem;
+        }
+        
+        .title-sub {
+            display: block;
+            font-size: 0.9em;
+        }
+
+        @media (max-width: 576px) {
+            .title-text {
+                font-size: 1.3rem;
+            }
+            .title-text .subtitle {
+                font-size: 1rem;
+            }
+        }
+
+        /* Timer styles */
         #timer {
             position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px;
+            top: 10px;
+            right: 10px;
+            padding: 8px 12px;
             background-color: #f8f9fa;
             border-radius: 5px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            z-index: 1000;
+            font-size: 0.9rem;
         }
+
+        /* Question navigation */
         .question-nav {
             display: flex;
             flex-wrap: wrap;
             gap: 5px;
-            margin: 20px 0;
+            margin: 15px 0;
+            justify-content: center;
         }
+
         .question-nav button {
-            width: 40px;
-            height: 40px;
+            width: 35px;
+            height: 35px;
+            padding: 0;
+            font-size: 0.9rem;
         }
-        .nav-answered {
-            background-color: #198754 !important;
-            color: white !important;
+
+        /* Options styling */
+        #options button {
+            text-align: left;
+            padding: 10px 15px;
+            margin-bottom: 5px;
+            white-space: normal;
+            word-wrap: break-word;
         }
-        .result-correct {
-            background-color: #d4edda;
-            border-color: #c3e6cb;
+
+        /* Results section */
+        .card {
+            margin-bottom: 15px;
+            border-radius: 8px;
         }
-        .result-incorrect {
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
+
+        .card-body {
+            padding: 15px;
         }
+
+        /* Navigation buttons */
+        .btn {
+            padding: 8px 16px;
+            font-size: 0.95rem;
+            margin: 5px;
+        }
+
+        /* Footer */
         .footer {
-            position: relative;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
             text-align: center;
             font-size: 0.9rem;
             color: #6c757d;
-            padding: 20px 0;
-            margin-top: 40px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            z-index: 1000;
         }
+
         .heart {
             color: #007bff;
             display: inline-block;
             animation: heartbeat 1.5s ease-in-out infinite;
         }
+
         @keyframes heartbeat {
             0% { transform: scale(1); }
             50% { transform: scale(1.1); }
             100% { transform: scale(1); }
+        }
+
+        /* Form elements */
+        .form-control, .form-select {
+            margin-bottom: 10px;
+        }
+
+        /* Results styling */
+        .result-correct {
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
+
+        .result-incorrect {
+            background-color: #f8d7da;
+            border-color: #f5c6cb;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 576px) {
+            h1 {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+
+            h2 {
+                font-size: 1.3rem;
+            }
+
+            .btn {
+                width: 100%;
+                margin-bottom: 10px;
+            }
+
+            .d-flex {
+                flex-direction: column;
+            }
+
+            #timer {
+                position: static;
+                margin-bottom: 15px;
+                text-align: center;
+            }
+
+            .container {
+                padding: 10px;
+            }
+
+            .card {
+                margin: 10px 0;
+            }
+        }
+
+        @media (min-width: 577px) and (max-width: 768px) {
+            .container {
+                max-width: 540px;
+            }
+        }
+
+        @media (min-width: 769px) {
+            .container {
+                max-width: 720px;
+            }
+
+            .btn {
+                margin: 5px;
+            }
+        }
+
+        /* Improve touch targets on mobile */
+        @media (hover: none) {
+            .btn, 
+            .form-control,
+            .form-select,
+            #options button {
+                min-height: 44px;
+            }
         }
     </style>
 </head>
@@ -66,7 +216,10 @@
     <div class="container mt-5 mb-5">
         <!-- Generator Section -->
         <div id="generator-section">
-            <h1 class="mb-4">MCQ Generator (𝘔𝘊𝘘 𝘎𝘌𝘕 𝘈𝘐)</h1>
+            <h1 class="mb-4 text-center">
+                MCQ Generator<br>
+                (𝘔𝘊𝘘 𝘎𝘌𝘕 𝘈𝘐)
+            </h1>
             <form id="url-form" class="mb-4">
                 <div class="mb-3">
                     <label class="form-label">Choose Input Method:</label>
