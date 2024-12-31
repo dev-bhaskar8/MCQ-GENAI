@@ -310,4 +310,7 @@ def get_answers():
     return jsonify({'answers': session['answers']})
 
 if __name__ == '__main__':
-    app.run(debug=True, port=8000) 
+    # Get port from environment variable or default to 8000
+    port = int(os.environ.get('PORT', 8000))
+    # In production, host should be '0.0.0.0' to accept all incoming connections
+    app.run(host='0.0.0.0', port=port, debug=False) 
