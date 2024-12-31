@@ -10,6 +10,8 @@ import PyPDF2
 import io
 import time
 from datetime import datetime, timedelta
+import docx
+import chardet
 
 # Load environment variables from .env file
 load_dotenv()
@@ -395,6 +397,47 @@ def display_mcqs(questions):
             print(f"{opt}) {text}")
         print(f"\nCorrect Answer: {q['correct_answer']}")
         print("-" * 80)
+
+def read_pdf_content(file_path):
+    """Extract text content from a PDF file."""
+    content = []
+    with open(file_path, 'rb') as file:
+        pdf_reader = PyPDF2.PdfReader(file)
+        for page in pdf_reader.pages:
+            content.append(page.extract_text())
+    return ' '.join(content)
+
+def read_docx_content(file_path):
+    """Extract text content from a Word document."""
+    doc = docx.Document(file_path)
+    content = []
+    for paragraph in doc.paragraphs:
+        if paragraph.text.strip():
+            content.append(paragraph.text)
+    return ' '.join(content)
+
+def read_text_file(file_path):
+    """Extract text content from a text file with encoding detection."""
+    with open(file_path, 'rb') as file:
+        raw_data = file.read()
+        detected = chardet.detect(raw_data)
+        encoding = detected['encoding']
+    
+    with open(file_path, 'r', encoding=encoding) as file:
+        return file.read()
+
+def extract_file_content(file_path):
+    """Extract content from a file based on its extension."""
+    file_extension = file_path.lower().split('.')[-1]
+    
+    if file_extension == 'pdf':
+        return read_pdf_content(file_path)
+    elif file_extension in ['doc', 'docx']:
+        return read_docx_content(file_path)
+    elif file_extension == 'txt':
+        return read_text_file(file_path)
+    else:
+        raise ValueError(f"Unsupported file format: .{file_extension}")
 
 def main():
     url = input("Enter the URL to generate MCQs from: ")

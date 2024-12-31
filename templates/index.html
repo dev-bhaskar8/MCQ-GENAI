@@ -48,13 +48,33 @@
             <h1 class="mb-4">MCQ Generator</h1>
             <form id="url-form" class="mb-4">
                 <div class="mb-3">
-                    <label for="url" class="form-label">Enter URL:</label>
-                    <input type="url" class="form-control" id="url" name="url" required>
+                    <label class="form-label">Choose Input Method:</label>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="input_method" id="url_input" value="url" checked>
+                        <label class="form-check-label" for="url_input">URL</label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="radio" name="input_method" id="file_input" value="file">
+                        <label class="form-check-label" for="file_input">File Upload</label>
+                    </div>
                 </div>
+                
+                <div id="url-section" class="mb-3">
+                    <label for="url" class="form-label">Enter URL:</label>
+                    <input type="url" class="form-control" id="url" name="url">
+                </div>
+
+                <div id="file-section" class="mb-3 hidden">
+                    <label for="file" class="form-label">Upload File (PDF/Word/Text):</label>
+                    <input type="file" class="form-control" id="file" name="file" accept=".pdf,.doc,.docx,.txt">
+                    <small class="text-muted">Supported formats: PDF, Word (doc/docx), Text files</small>
+                </div>
+
                 <div class="mb-3">
                     <label for="num_questions" class="form-label">Number of Questions:</label>
                     <input type="number" class="form-control" id="num_questions" name="num_questions" value="{{ default_questions }}" min="5" max="100">
                 </div>
+
                 <div class="mb-3">
                     <label for="difficulty" class="form-label">Difficulty Level:</label>
                     <select class="form-select" id="difficulty" name="difficulty" required>
@@ -64,6 +84,7 @@
                         <option value="very_hard">Very Hard</option>
                     </select>
                 </div>
+
                 <button type="submit" class="btn btn-primary">Generate Questions</button>
             </form>
             <div id="progress" class="hidden">
@@ -373,21 +394,58 @@
         }
 
         // Event Listeners
+        document.querySelectorAll('input[name="input_method"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const urlSection = document.getElementById('url-section');
+                const fileSection = document.getElementById('file-section');
+                const urlInput = document.getElementById('url');
+                const fileInput = document.getElementById('file');
+
+                if (e.target.value === 'url') {
+                    urlSection.classList.remove('hidden');
+                    fileSection.classList.add('hidden');
+                    urlInput.required = true;
+                    fileInput.required = false;
+                } else {
+                    urlSection.classList.add('hidden');
+                    fileSection.classList.remove('hidden');
+                    urlInput.required = false;
+                    fileInput.required = true;
+                }
+            });
+        });
+
         document.getElementById('url-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
-            const url = form.url.value;
+            const inputMethod = form.querySelector('input[name="input_method"]:checked').value;
             const numQuestions = form.num_questions.value;
             const difficulty = form.difficulty.value;
             
             document.getElementById('progress').classList.remove('hidden');
             
             try {
+                const formData = new FormData();
+                formData.append('num_questions', numQuestions);
+                formData.append('difficulty', difficulty);
+                
+                if (inputMethod === 'url') {
+                    formData.append('url', form.url.value);
+                    formData.append('input_method', 'url');
+                } else {
+                    const file = form.file.files[0];
+                    if (!file) {
+                        throw new Error('Please select a file');
+                    }
+                    formData.append('file', file);
+                    formData.append('input_method', 'file');
+                }
+                
                 const response = await fetch('/generate', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: `url=${encodeURIComponent(url)}&num_questions=${numQuestions}&difficulty=${difficulty}`
+                    body: formData
                 });
+                
                 const data = await response.json();
                 
                 if (data.error) {
