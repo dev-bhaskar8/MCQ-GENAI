@@ -207,8 +207,8 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         1. Return ONLY a JSON array containing {batch_size} question objects
         2. Each question MUST have:
            - 4 specific answer options (a, b, c, d)
-           - Option e: "All of the above"
-           - Option f: "None of these"
+           - Option e: "All of the above" (use ONLY when all previous options are correct)
+           - Option f: "None of these" (use ONLY when all previous options are incorrect)
         3. Use this exact JSON structure and format your response as pure JSON:
         [
             {{
@@ -232,8 +232,12 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         - IMPORTANT: For approximately 95% of questions, distribute correct answers evenly among options a, b, c, and d
         - IMPORTANT: For about 2.5% of questions, make option "e" (All of the above) the correct answer
         - IMPORTANT: For about 2.5% of questions, make option "f" (None of these) the correct answer
-        - For option "e" to be correct, ensure options a, b, c, and d are ALL valid correct statements
-        - For option "f" to be correct, ensure options a, b, c, and d are ALL incorrect statements
+        - CRITICAL: When using option "e" (All of the above):
+          * ONLY use when options a, b, c, and d are ALL valid correct statements
+          * Do NOT include any variations like "All the above" or similar phrases in other options
+        - CRITICAL: When using option "f" (None of these):
+          * ONLY use when options a, b, c, and d are ALL incorrect statements
+          * Do NOT include any variations like "None of the above" or similar phrases in other options
         - Questions should test understanding, not just memorization
         - Cover different aspects of the content
         - Avoid repetitive or similar questions
@@ -247,7 +251,8 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         - Ensure proper JSON formatting
         - Each question must have all 6 options (a through f)
         - Keep questions and options concise to fit more in the batch
-        - Use options e and f sparingly (about 5% of questions combined)"""
+        - Use options e and f sparingly (about 5% of questions combined)
+        - NEVER duplicate "All of the above" or "None of these" in other options"""
 
         # Record this request
         request_timestamps.append(datetime.now())
