@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg width="1024" height="500" viewBox="0 0 1024 500" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect x="0" y="0" width="1024" height="500" fill="#0d6efd"/>
+  
+  <!-- Main Title -->
+  <text x="512" y="200" 
+        font-family="SF Pro Display, -apple-system, Arial, sans-serif" 
+        font-size="80" 
+        font-weight="bold" 
+        text-anchor="middle" 
+        fill="white">
+    MCQ Generator
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="512" y="300" 
+        font-family="SF Pro Display, -apple-system, Arial, sans-serif" 
+        font-size="40" 
+        font-weight="normal" 
+        text-anchor="middle" 
+        fill="rgba(255, 255, 255, 0.8)">
+    Generate Questions from Any Content
+  </text>
+</svg> 

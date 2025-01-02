@@ -137,6 +137,12 @@ def allowed_file(filename):
 def index():
     return render_template('index.html', default_questions=25)
 
+@app.route('/privacy-policy')
+def privacy_policy():
+    from datetime import datetime
+    current_date = datetime.now().strftime('%B %d, %Y')
+    return render_template('privacy-policy.html', current_date=current_date)
+
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
