@@ -20,6 +20,37 @@
   ],
   "related_applications": [],
   "prefer_related_applications": false,
+  "display_override": ["window-controls-overlay", "standalone"],
+  "handle_links": "preferred",
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "application/pdf": [".pdf"],
+        "application/msword": [".doc", ".docx"],
+        "text/plain": [".txt"]
+      }
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Generate Questions",
+      "url": "/",
+      "icons": [{ "src": "/static/icons/icon_96x96.png", "sizes": "96x96" }]
+    }
+  ],
+  "share_target": {
+    "action": "/",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
   "icons": [
     {
       "src": "/static/icons/icon_48x48.png",

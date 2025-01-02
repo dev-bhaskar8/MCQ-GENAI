@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, Response, session
+from flask import Flask, render_template, request, jsonify, Response, session, make_response, send_from_directory
 from summarize_url import fetch_url_content, generate_all_mcqs, extract_file_content
 import json
 import queue
@@ -265,6 +265,13 @@ def progress(queue_id):
             cleanup_queue(queue_id)
 
     return Response(generate(), mimetype='text/event-stream')
+
+@app.route('/service-worker.js')
+def service_worker():
+    response = make_response(send_from_directory('static', 'service-worker.js'))
+    response.headers['Content-Type'] = 'application/javascript'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
 
 @app.route('/offline.html')
 def offline():
