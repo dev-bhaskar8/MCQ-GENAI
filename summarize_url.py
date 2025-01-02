@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timedelta
 import docx
 import chardet
+import gc
 
 # Load environment variables from .env file
 load_dotenv()
@@ -48,9 +49,15 @@ def extract_pdf_content(response):
     try:
         pdf_file = io.BytesIO(response.content)
         pdf_reader = PyPDF2.PdfReader(pdf_file)
-        text = ""
-        for page in pdf_reader.pages:
-            text += page.extract_text() + "\n"
+        # Use list comprehension and join instead of string concatenation
+        text = '\n'.join(page.extract_text() for page in pdf_reader.pages)
+        
+        # Limit content size to prevent memory issues
+        max_chars = 100000
+        if len(text) > max_chars:
+            text = text[:max_chars]
+            logger.warning(f"PDF content truncated to {max_chars} characters")
+            
         return text.strip()
     except Exception as e:
         return f"Error extracting PDF content: {str(e)}"
@@ -315,58 +322,74 @@ def generate_all_mcqs(content, total_questions=25, batch_size=5, difficulty='med
     # Dynamic delay calculation based on REQUESTS_PER_MINUTE
     delay_time = (60.0 / REQUESTS_PER_MINUTE)  # Convert RPM to seconds per request
     
-    for i in range(num_batches):
-        current_batch = i + 1
-        start_num = i * batch_size
-        current_batch_size = min(batch_size, total_questions - start_num)
-        
-        # Add smart delay between batches
-        if i > 0:
-            delay_message = f'Pacing requests... waiting {delay_time:.1f} seconds before next batch'
+    # Limit content size for API requests
+    max_content_chars = 100000
+    if len(content) > max_content_chars:
+        content = content[:max_content_chars]
+        logger.warning(f"Content truncated to {max_content_chars} characters for API processing")
+    
+    try:
+        for i in range(num_batches):
+            current_batch = i + 1
+            start_num = i * batch_size
+            current_batch_size = min(batch_size, total_questions - start_num)
+            
+            # Add smart delay between batches
+            if i > 0:
+                delay_message = f'Pacing requests... waiting {delay_time:.1f} seconds before next batch'
+                if progress_queue:
+                    progress_queue.put(('status', delay_message))
+                time.sleep(delay_time)
+            
             if progress_queue:
-                progress_queue.put(('status', delay_message))
-            time.sleep(delay_time)
-        
-        if progress_queue:
-            progress_queue.put(('status', f'Processing batch {current_batch} of {num_batches} ({current_batch_size} questions)...'))
-        
-        batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
-        
-        if isinstance(batch_questions, str):  # Error occurred
-            error_msg = batch_questions
-            if "rate limit" in error_msg.lower():
-                # If we hit rate limit, use exponential backoff
-                retry_wait = 15
-                max_retries = 3
-                
-                for retry in range(max_retries):
-                    retry_message = f'Rate limit hit. Waiting {retry_wait} seconds before retry {retry + 1}/{max_retries}...'
-                    if progress_queue:
-                        progress_queue.put(('status', retry_message))
-                    time.sleep(retry_wait)
-                    retry_wait *= 2
+                progress_queue.put(('status', f'Processing batch {current_batch} of {num_batches} ({current_batch_size} questions)...'))
+            
+            batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
+            
+            if isinstance(batch_questions, str):  # Error occurred
+                error_msg = batch_questions
+                if "rate limit" in error_msg.lower():
+                    # If we hit rate limit, use exponential backoff
+                    retry_wait = 15
+                    max_retries = 3
                     
-                    # Retry the batch
-                    batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
-                    if not isinstance(batch_questions, str):  # Success
-                        break
-                
-                if isinstance(batch_questions, str):  # Still failed after retries
+                    for retry in range(max_retries):
+                        retry_message = f'Rate limit hit. Waiting {retry_wait} seconds before retry {retry + 1}/{max_retries}...'
+                        if progress_queue:
+                            progress_queue.put(('status', retry_message))
+                        time.sleep(retry_wait)
+                        retry_wait *= 2
+                        
+                        # Retry the batch
+                        batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
+                        if not isinstance(batch_questions, str):  # Success
+                            break
+                    
+                    if isinstance(batch_questions, str):  # Still failed after retries
+                        if progress_queue:
+                            progress_queue.put(('error', batch_questions))
+                        return batch_questions
+                else:
                     if progress_queue:
                         progress_queue.put(('error', batch_questions))
                     return batch_questions
-            else:
-                if progress_queue:
-                    progress_queue.put(('error', batch_questions))
-                return batch_questions
-        
-        all_questions.extend(batch_questions)
-        
-        # Update progress after each batch
+            
+            all_questions.extend(batch_questions)
+            
+            # Update progress after each batch
+            if progress_queue:
+                progress = (current_batch * 100) // num_batches
+                progress_queue.put(('progress', progress))
+                progress_queue.put(('status', f'Completed batch {current_batch} of {num_batches} successfully'))
+            
+            # Force garbage collection after each batch
+            gc.collect()
+    
+    except Exception as e:
+        logger.error(f"Error in generate_all_mcqs: {str(e)}")
         if progress_queue:
-            progress = (current_batch * 100) // num_batches
-            progress_queue.put(('progress', progress))
-            progress_queue.put(('status', f'Completed batch {current_batch} of {num_batches} successfully'))
+            progress_queue.put(('error', f'An error occurred: {str(e)}'))
+        return str(e)
     
     if progress_queue:
         progress_queue.put(('progress', 100))  # Ensure we reach 100%
@@ -393,12 +416,27 @@ def display_mcqs(questions):
 
 def read_pdf_content(file_path):
     """Extract text content from a PDF file."""
-    content = []
-    with open(file_path, 'rb') as file:
-        pdf_reader = PyPDF2.PdfReader(file)
-        for page in pdf_reader.pages:
-            content.append(page.extract_text())
-    return ' '.join(content)
+    try:
+        content = []
+        with open(file_path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            # Process pages in chunks to manage memory
+            chunk_size = 10
+            for i in range(0, len(pdf_reader.pages), chunk_size):
+                chunk = pdf_reader.pages[i:i+chunk_size]
+                content.extend(page.extract_text() for page in chunk)
+                gc.collect()  # Clear memory after each chunk
+                
+        text = '\n'.join(content)
+        # Limit content size
+        max_chars = 100000
+        if len(text) > max_chars:
+            text = text[:max_chars]
+            logger.warning(f"PDF content truncated to {max_chars} characters")
+            
+        return text
+    except Exception as e:
+        return f"Error reading PDF: {str(e)}"
 
 def read_docx_content(file_path):
     """Extract text content from a Word document."""
