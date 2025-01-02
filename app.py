@@ -266,6 +266,10 @@ def progress(queue_id):
 
     return Response(generate(), mimetype='text/event-stream')
 
+@app.route('/offline.html')
+def offline():
+    return render_template('offline.html')
+
 if __name__ == '__main__':
     # Get port from environment variable or default to 8000
     port = int(os.environ.get('PORT', 8000))
