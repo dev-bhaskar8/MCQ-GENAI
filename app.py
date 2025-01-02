@@ -148,11 +148,11 @@ def generate():
             }), 429
             
         # Check master password
-        master_password = os.getenv('MASTER_PASSWORD')
-        provided_password = request.form.get('master_password')
+        # master_password = os.getenv('MASTER_PASSWORD')
+        # provided_password = request.form.get('master_password')
         
-        if not provided_password or provided_password != master_password:
-            return jsonify({'error': 'Invalid master password'}), 403
+        # if not provided_password or provided_password != master_password:
+        #     return jsonify({'error': 'Invalid master password'}), 403
             
         num_questions = int(request.form.get('num_questions', 25))
         difficulty = request.form.get('difficulty', 'medium')
