@@ -9,6 +9,7 @@ from datetime import datetime
 import time
 import os
 from werkzeug.utils import secure_filename
+import gc
 
 # Configure logging
 logging.basicConfig(
@@ -65,19 +66,42 @@ def generate_with_progress(content_or_url, num_questions, queue_id, difficulty='
 
         # Generate MCQs with progress updates
         logger.info("Starting MCQ generation")
-        questions = generate_all_mcqs(content, total_questions=num_questions, difficulty=difficulty, progress_queue=progress_queues[queue_id])
+        logger.info(f"Will generate {num_questions} questions in batches of 5")
+        progress_queues[queue_id].put(('status', f'Initializing generation of {num_questions} {difficulty} level questions...'))
+        progress_queues[queue_id].put(('progress', 0))
         
-        if questions:
-            logger.info(f"Successfully generated {len(questions)} questions")
-            # Add difficulty to questions metadata
+        # Process in smaller batches of 5 questions
+        batch_size = 5
+        num_batches = (num_questions + batch_size - 1) // batch_size
+        logger.info(f"Total batches needed: {num_batches}")
+        progress_queues[queue_id].put(('status', f'Starting generation in {num_batches} batches...'))
+        
+        # Generate all questions at once with proper batch size
+        all_questions = generate_all_mcqs(
+            content, 
+            total_questions=num_questions,
+            batch_size=batch_size,
+            difficulty=difficulty,
+            progress_queue=progress_queues[queue_id]
+        )
+        
+        # Check if we got an error string back
+        if isinstance(all_questions, str):
+            logger.error(f"Failed to generate questions: {all_questions}")
+            progress_queues[queue_id].put(('error', all_questions))
+            return
+        
+        if all_questions:
+            logger.info(f"Successfully generated {len(all_questions)} questions")
             questions_with_meta = {
-                'questions': questions,
+                'questions': all_questions,
                 'difficulty': difficulty
             }
             progress_queues[queue_id].put(('complete', questions_with_meta))
         else:
             logger.error("Failed to generate questions")
             progress_queues[queue_id].put(('error', 'Failed to generate questions'))
+            
     except Exception as e:
         logger.error(f"Error in generate_with_progress: {str(e)}", exc_info=True)
         progress_queues[queue_id].put(('error', f'An error occurred: {str(e)}'))

@@ -17,7 +17,7 @@ import chardet
 load_dotenv()
 
 # Rate limiting settings
-REQUESTS_PER_MINUTE = 8  # Setting to 8 to be safe (under the 10 RPM limit)
+REQUESTS_PER_MINUTE = 10  # Setting to 10 RPM
 request_timestamps = []
 
 def wait_for_rate_limit():
@@ -306,37 +306,31 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
 def generate_all_mcqs(content, total_questions=25, batch_size=5, difficulty='medium', progress_queue=None):
     """Generate MCQs with optimized rate limit handling."""
     all_questions = []
-    num_batches = total_questions // batch_size
+    num_batches = (total_questions + batch_size - 1) // batch_size
     
     if progress_queue:
-        progress_queue.put(('status', f'Generating {total_questions} {difficulty} level MCQs in {num_batches} batches...'))
-    else:
-        print(f"\nGenerating {total_questions} {difficulty} level MCQs in {num_batches} batches...")
+        progress_queue.put(('status', f'Starting generation of {total_questions} {difficulty} level MCQs...'))
+        progress_queue.put(('progress', 0))  # Initialize progress
     
-    # Calculate optimal delay based on total batches and rate limit
-    delay_time = max(6, 60 // (num_batches + 1))  # Minimum 6 seconds between batches
+    # Dynamic delay calculation based on REQUESTS_PER_MINUTE
+    delay_time = (60.0 / REQUESTS_PER_MINUTE)  # Convert RPM to seconds per request
     
     for i in range(num_batches):
         current_batch = i + 1
-        progress = (current_batch / num_batches) * 100
+        start_num = i * batch_size
+        current_batch_size = min(batch_size, total_questions - start_num)
         
         # Add smart delay between batches
         if i > 0:
-            delay_message = f'Pacing requests... waiting {delay_time} seconds before batch {current_batch}'
+            delay_message = f'Pacing requests... waiting {delay_time:.1f} seconds before next batch'
             if progress_queue:
                 progress_queue.put(('status', delay_message))
-            else:
-                print(delay_message)
             time.sleep(delay_time)
         
         if progress_queue:
-            progress_queue.put(('status', f'Generating batch {current_batch}/{num_batches}...'))
-            progress_queue.put(('progress', progress))
-        else:
-            print(f"Progress: {progress:.1f}% (Batch {current_batch}/{num_batches})")
-            
-        start_num = i * batch_size  # Fixed start number calculation
-        batch_questions = generate_mcqs_batch(content, start_num, batch_size, difficulty, progress_queue)
+            progress_queue.put(('status', f'Processing batch {current_batch} of {num_batches} ({current_batch_size} questions)...'))
+        
+        batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
         
         if isinstance(batch_questions, str):  # Error occurred
             error_msg = batch_questions
@@ -349,41 +343,35 @@ def generate_all_mcqs(content, total_questions=25, batch_size=5, difficulty='med
                     retry_message = f'Rate limit hit. Waiting {retry_wait} seconds before retry {retry + 1}/{max_retries}...'
                     if progress_queue:
                         progress_queue.put(('status', retry_message))
-                    else:
-                        print(retry_message)
                     time.sleep(retry_wait)
-                    
-                    # Double the wait time for next retry
                     retry_wait *= 2
                     
                     # Retry the batch
-                    batch_questions = generate_mcqs_batch(content, start_num, batch_size, difficulty, progress_queue)
+                    batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
                     if not isinstance(batch_questions, str):  # Success
                         break
-                    
-                if isinstance(batch_questions, str):  # Still failed after all retries
+                
+                if isinstance(batch_questions, str):  # Still failed after retries
                     if progress_queue:
-                        progress_queue.put(('error', "Rate limit persists. Please try again in a few minutes."))
-                    else:
-                        print("\nRate limit persists. Please try again in a few minutes.")
-                    return None
+                        progress_queue.put(('error', batch_questions))
+                    return batch_questions
             else:
                 if progress_queue:
-                    progress_queue.put(('error', error_msg))
-                else:
-                    print(error_msg)
-                return None
-            
+                    progress_queue.put(('error', batch_questions))
+                return batch_questions
+        
         all_questions.extend(batch_questions)
         
-        # Send completion status for this batch
+        # Update progress after each batch
         if progress_queue:
-            progress_queue.put(('status', f'Completed batch {current_batch}/{num_batches} ({len(batch_questions)} questions)'))
+            progress = (current_batch * 100) // num_batches
+            progress_queue.put(('progress', progress))
+            progress_queue.put(('status', f'Completed batch {current_batch} of {num_batches} successfully'))
     
-    # Send final status
     if progress_queue:
-        progress_queue.put(('status', f'Successfully generated {len(all_questions)} questions!'))
-        
+        progress_queue.put(('progress', 100))  # Ensure we reach 100%
+        progress_queue.put(('status', f'Successfully generated all {len(all_questions)} questions!'))
+    
     return all_questions
 
 def display_mcqs(questions):
