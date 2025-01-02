@@ -12,6 +12,96 @@
     <style>
         .hidden { display: none; }
         
+        /* Notification styles */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1040;
+            display: none;
+        }
+        
+        #notification {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1050;
+            max-width: 350px;
+            display: none;
+        }
+        
+        .notification-card {
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+            padding: 20px;
+            border: none;
+            animation: fadeIn 0.3s ease-out;
+            min-width: 300px;
+        }
+
+        .notification-card .message {
+            margin-bottom: 15px;
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #333;
+        }
+
+        .notification-card .button-group {
+            display: flex;
+            gap: 12px;
+            margin-top: 15px;
+        }
+
+        .notification-card .confirm-button,
+        .notification-card .cancel-button,
+        .notification-card .ok-button {
+            flex: 1;
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.95rem;
+            transition: all 0.2s ease;
+        }
+
+        .notification-card .confirm-button {
+            background: #0d6efd;
+            color: white;
+        }
+
+        .notification-card .confirm-button:hover {
+            background: #0b5ed7;
+            transform: translateY(-1px);
+        }
+
+        .notification-card .cancel-button,
+        .notification-card .ok-button {
+            background: #f1f3f5;
+            color: #495057;
+        }
+
+        .notification-card .cancel-button:hover,
+        .notification-card .ok-button:hover {
+            background: #e9ecef;
+            transform: translateY(-1px);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
         /* Mobile-first base styles */
         body {
             font-size: 16px;
@@ -20,15 +110,15 @@
         }
 
         .container {
-            padding: 15px;
+            padding: 10px;
             max-width: 100%;
         }
 
         /* Title styles */
         .title-text {
             font-size: clamp(1.2rem, 4vw, 1.8rem);
-            margin-bottom: 1.5rem;
-            text-align: center;
+            margin-bottom: 1rem;
+            text-align: left;
             white-space: pre-line;
             line-height: 1.5;
         }
@@ -225,14 +315,18 @@
     </style>
 </head>
 <body>
-    <div class="container mt-5 mb-5">
+    <!-- Add overlay -->
+    <div class="overlay"></div>
+    <!-- Add notification container -->
+    <div id="notification"></div>
+
+    <div class="container mt-4 mb-4">
         <!-- Generator Section -->
         <div id="generator-section">
-            <h1 class="mb-4 text-center">
-                MCQ Generator<br>
-                (𝘔𝘊𝘘 𝘎𝘌𝘕 𝘈𝘐)
+            <h1 class="mb-3">
+                MCQ Generator (𝘔𝘊𝘘 𝘎𝘌𝘕 𝘈𝘐)
             </h1>
-            <form id="url-form" class="mb-4">
+            <form id="url-form" class="mb-3">
                 <div class="mb-3">
                     <label class="form-label">Choose Input Method:</label>
                     <div class="form-check">
@@ -247,7 +341,7 @@
                 
                 <div id="url-section" class="mb-3">
                     <label for="url" class="form-label">Enter URL:</label>
-                    <input type="url" class="form-control" id="url" name="url">
+                    <input type="url" class="form-control" id="url" name="url" placeholder='For example, "https://en.wikipedia.org/wiki/Bitcoin"'>
                     <small class="text-muted">Supported content: Articles, blogs, documentation, PDF links, and text-based web pages</small>
                 </div>
 
@@ -259,7 +353,7 @@
 
                 <div class="mb-3">
                     <label for="num_questions" class="form-label">Number of Questions:</label>
-                    <input type="number" class="form-control" id="num_questions" name="num_questions" value="{{ default_questions }}" min="5" max="100">
+                    <input type="number" class="form-control" id="num_questions" name="num_questions" value="{{ default_questions }}" min="5" max="1000">
                 </div>
 
                 <div class="mb-3">
@@ -272,7 +366,7 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary">Generate Questions</button>
+                <button type="submit" class="btn btn-primary" id="generate-btn">Generate Questions</button>
             </form>
             <div id="progress" class="hidden">
                 <div class="progress mb-3">
@@ -724,11 +818,10 @@
         document.getElementById('url-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Remove master password prompt
-            // const masterPassword = prompt('Please enter the master password:');
-            // if (!masterPassword) {
-            //     return;  // User cancelled the prompt
-            // }
+            // Disable button and change text
+            const generateBtn = document.getElementById('generate-btn');
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Loading...';
             
             const form = e.target;
             const inputMethod = form.querySelector('input[name="input_method"]:checked').value;
@@ -741,7 +834,6 @@
                 const formData = new FormData();
                 formData.append('num_questions', numQuestions);
                 formData.append('difficulty', difficulty);
-                // formData.append('master_password', masterPassword);
                 
                 if (inputMethod === 'url') {
                     formData.append('url', form.url.value);
@@ -786,15 +878,24 @@
                         eventSource.close();
                         generatedQuestions = progress.questions;
                         showPreview(progress.questions.length);
+                        // Re-enable button and restore text
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = 'Generate Questions';
                     }
                     if (progress.error) {
                         eventSource.close();
+                        // Re-enable button and restore text on error
+                        generateBtn.disabled = false;
+                        generateBtn.textContent = 'Generate Questions';
                         throw new Error(progress.error);
                     }
                 };
             } catch (error) {
                 document.getElementById('status').className = 'alert alert-danger';
                 document.getElementById('status').textContent = error.message;
+                // Re-enable button and restore text on error
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate Questions';
             }
         });
 
@@ -826,7 +927,7 @@
                 document.getElementById('preview-section').classList.add('hidden');
                 startTest(questions);
             } catch (error) {
-                alert('Error starting test: ' + error.message);
+                showNotification('Error starting test: ' + error.message);
             }
         });
 
@@ -850,22 +951,59 @@
             }
         });
 
+        // Add confirm notification function
+        function showConfirmNotification(message, onConfirm) {
+            const overlay = document.querySelector('.overlay');
+            const notificationContainer = document.getElementById('notification');
+            const notificationElement = document.createElement('div');
+            notificationElement.className = 'notification-card warning';
+            
+            // Create message and buttons
+            notificationElement.innerHTML = `
+                <div class="message">${message}</div>
+                <div class="button-group">
+                    <button class="confirm-button">Yes</button>
+                    <button class="cancel-button">No</button>
+                </div>
+            `;
+            
+            // Add click handlers
+            const confirmButton = notificationElement.querySelector('.confirm-button');
+            const cancelButton = notificationElement.querySelector('.cancel-button');
+            
+            const closeNotification = () => {
+                overlay.style.display = 'none';
+                notificationContainer.style.display = 'none';
+                notificationElement.remove();
+            };
+            
+            confirmButton.addEventListener('click', () => {
+                closeNotification();
+                onConfirm();
+            });
+            
+            cancelButton.addEventListener('click', closeNotification);
+            
+            overlay.style.display = 'block';
+            notificationContainer.style.display = 'block';
+            notificationContainer.appendChild(notificationElement);
+        }
+
         document.getElementById('finish-test').addEventListener('click', () => {
             if (Object.keys(userAnswers).length === 0) {
-                alert('Please answer at least one question before finishing the test.');
+                showNotification('Please answer at least one question before finishing the test.', 'warning');
                 return;
             }
             
-            if (confirm('Are you sure you want to finish the test?')) {
+            showConfirmNotification('Are you sure you want to finish the test?', () => {
                 try {
-                    // Calculate results client-side
                     const results = checkAnswers(currentQuestions);
                     showResults(results);
                 } catch (error) {
                     console.error('Error processing results:', error);
-                    alert('Error processing results: ' + error.message);
+                    showNotification('Error processing results: ' + error.message);
                 }
-            }
+            });
         });
 
         // Add event listener for retry button
@@ -890,7 +1028,7 @@
                     showPreview(lastQuestions.length);  // Show preview section with the same questions
                 } catch (error) {
                     console.error('Error resetting quiz:', error);
-                    alert('Error resetting quiz. Please try again.');
+                    showNotification('Error resetting quiz. Please try again.');
                 }
             }
         });
@@ -1026,6 +1164,32 @@
             
             // Show results section
             resultsDiv.classList.remove('hidden');
+        }
+
+        // Add notification functions
+        function showNotification(message, type = 'error') {
+            const overlay = document.querySelector('.overlay');
+            const notificationContainer = document.getElementById('notification');
+            const notificationElement = document.createElement('div');
+            notificationElement.className = `notification-card ${type}`;
+            
+            // Create message and button elements
+            notificationElement.innerHTML = `
+                <div class="message">${message}</div>
+                <button class="ok-button">OK</button>
+            `;
+            
+            // Add click handler for OK button
+            const okButton = notificationElement.querySelector('.ok-button');
+            okButton.addEventListener('click', () => {
+                overlay.style.display = 'none';
+                notificationContainer.style.display = 'none';
+                notificationElement.remove();
+            });
+            
+            overlay.style.display = 'block';
+            notificationContainer.style.display = 'block';
+            notificationContainer.appendChild(notificationElement);
         }
     </script>
 </body>
