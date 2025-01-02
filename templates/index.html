@@ -724,11 +724,11 @@
         document.getElementById('url-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Prompt for master password
-            const masterPassword = prompt('Please enter the master password:');
-            if (!masterPassword) {
-                return;  // User cancelled the prompt
-            }
+            // Remove master password prompt
+            // const masterPassword = prompt('Please enter the master password:');
+            // if (!masterPassword) {
+            //     return;  // User cancelled the prompt
+            // }
             
             const form = e.target;
             const inputMethod = form.querySelector('input[name="input_method"]:checked').value;
@@ -741,7 +741,7 @@
                 const formData = new FormData();
                 formData.append('num_questions', numQuestions);
                 formData.append('difficulty', difficulty);
-                formData.append('master_password', masterPassword);
+                // formData.append('master_password', masterPassword);
                 
                 if (inputMethod === 'url') {
                     formData.append('url', form.url.value);

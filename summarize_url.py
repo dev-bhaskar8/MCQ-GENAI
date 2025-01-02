@@ -342,7 +342,7 @@ def generate_all_mcqs(content, total_questions=25, batch_size=5, difficulty='med
                 time.sleep(delay_time)
             
             if progress_queue:
-                progress_queue.put(('status', f'Processing batch {current_batch} of {num_batches} ({current_batch_size} questions)...'))
+                progress_queue.put(('status', f'Processing batch {current_batch} of {num_batches} ({current_batch_size} questions out of {total_questions} questions at a time)...'))
             
             batch_questions = generate_mcqs_batch(content, start_num, current_batch_size, difficulty, progress_queue)
             
