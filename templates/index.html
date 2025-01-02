@@ -368,6 +368,8 @@
         let generatedQuestions = null;
         let lastQuestions = null;
         let lastResults = null;  // Store the last results for PDF generation
+        const questionsPerPage = 10; // Add pagination constant
+        let currentPage = 0; // Add current page tracker
 
         function formatTime(seconds) {
             const minutes = Math.floor(seconds / 60);
@@ -384,7 +386,8 @@
         function startTest(questions) {
             currentQuestions = questions;
             currentQuestionIndex = 0;
-            userAnswers = {};
+            currentPage = 0;
+            userAnswers = {};  // Reset answers at start
             
             // Setup timer
             startTime = new Date();
@@ -393,40 +396,162 @@
             // Setup question navigation
             const nav = document.querySelector('.question-nav');
             nav.innerHTML = '';
-            questions.forEach((_, index) => {
+            
+            // Only show buttons for current page
+            const startIdx = currentPage * questionsPerPage;
+            const endIdx = Math.min(startIdx + questionsPerPage, questions.length);
+            
+            for (let i = startIdx; i < endIdx; i++) {
                 const btn = document.createElement('button');
                 btn.className = 'btn btn-outline-secondary';
-                btn.textContent = index + 1;
-                btn.onclick = () => showQuestion(index);
+                btn.textContent = i + 1;
+                btn.onclick = () => showQuestion(i);
                 nav.appendChild(btn);
-            });
+            }
+            
+            // Add page navigation
+            const pageNav = document.createElement('div');
+            pageNav.className = 'd-flex justify-content-center mt-2 gap-2';
+            pageNav.style.width = '100%';
+            pageNav.style.clear = 'both';
+            
+            const prevPageBtn = document.createElement('button');
+            prevPageBtn.className = 'btn btn-outline-secondary';
+            prevPageBtn.textContent = '←';
+            prevPageBtn.style.width = '35px';
+            prevPageBtn.style.height = '35px';
+            prevPageBtn.style.padding = '0';
+            prevPageBtn.style.fontSize = '0.9rem';
+            prevPageBtn.onclick = () => changePage(currentPage - 1);
+            prevPageBtn.disabled = currentPage === 0;
+            
+            const nextPageBtn = document.createElement('button');
+            nextPageBtn.className = 'btn btn-outline-secondary';
+            nextPageBtn.textContent = '→';
+            nextPageBtn.style.width = '35px';
+            nextPageBtn.style.height = '35px';
+            nextPageBtn.style.padding = '0';
+            nextPageBtn.style.fontSize = '0.9rem';
+            nextPageBtn.onclick = () => changePage(currentPage + 1);
+            nextPageBtn.disabled = (currentPage + 1) * questionsPerPage >= questions.length;
+            
+            const pageInfo = document.createElement('span');
+            pageInfo.className = 'btn btn-light';
+            pageInfo.textContent = `Page ${currentPage + 1}/${Math.ceil(questions.length/questionsPerPage)}`;
+            
+            pageNav.appendChild(prevPageBtn);
+            pageNav.appendChild(pageInfo);
+            pageNav.appendChild(nextPageBtn);
+            nav.appendChild(pageNav);
             
             document.getElementById('generator-section').classList.add('hidden');
             document.getElementById('test-section').classList.remove('hidden');
 
-            // Get any existing answers from server
+            // Show first question immediately
+            showQuestion(startIdx);
+
+            // Then get any existing answers from server
             fetch('/get-answers', {
                 method: 'GET'
             })
             .then(response => response.json())
             .then(data => {
-                if (data.answers) {
+                if (data.answers && Object.keys(data.answers).length > 0) {
                     userAnswers = data.answers;
+                    // Refresh the current question display with any existing answer
+                    showQuestion(currentQuestionIndex);
                     // Update navigation buttons for existing answers
+                    const navButtons = document.querySelectorAll('.question-nav button:not(.btn-secondary):not(.btn-light)');
                     Object.keys(userAnswers).forEach(index => {
-                        const navButtons = document.querySelectorAll('.question-nav button');
-                        navButtons[index].classList.add('nav-answered');
+                        const buttonIndex = index % questionsPerPage;
+                        if (Math.floor(index / questionsPerPage) === currentPage && navButtons[buttonIndex]) {
+                            navButtons[buttonIndex].classList.add('nav-answered');
+                        }
                     });
                 }
-                showQuestion(0);
             })
             .catch(error => {
                 console.error('Error getting answers:', error);
-                showQuestion(0);
             });
         }
 
+        function changePage(newPage) {
+            if (newPage < 0 || newPage >= Math.ceil(currentQuestions.length / questionsPerPage)) {
+                return;
+            }
+            
+            currentPage = newPage;
+            const startIdx = currentPage * questionsPerPage;
+            
+            // Setup question navigation
+            const nav = document.querySelector('.question-nav');
+            nav.innerHTML = '';
+            
+            // Only show buttons for current page
+            const endIdx = Math.min(startIdx + questionsPerPage, currentQuestions.length);
+            
+            for (let i = startIdx; i < endIdx; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'btn btn-outline-secondary';
+                btn.textContent = i + 1;
+                btn.onclick = () => showQuestion(i);
+                if (userAnswers.hasOwnProperty(i)) {
+                    btn.classList.add('nav-answered');
+                }
+                nav.appendChild(btn);
+            }
+            
+            // Add page navigation
+            const pageNav = document.createElement('div');
+            pageNav.className = 'd-flex justify-content-center mt-2 gap-2';
+            pageNav.style.width = '100%';  // Make it full width
+            pageNav.style.clear = 'both';  // Force it to appear below floating elements
+            
+            const prevPageBtn = document.createElement('button');
+            prevPageBtn.className = 'btn btn-outline-secondary';
+            prevPageBtn.textContent = '←';
+            prevPageBtn.style.width = '35px';
+            prevPageBtn.style.height = '35px';
+            prevPageBtn.style.padding = '0';
+            prevPageBtn.style.fontSize = '0.9rem';
+            prevPageBtn.onclick = () => changePage(currentPage - 1);
+            prevPageBtn.disabled = currentPage === 0;
+            
+            const nextPageBtn = document.createElement('button');
+            nextPageBtn.className = 'btn btn-outline-secondary';
+            nextPageBtn.textContent = '→';
+            nextPageBtn.style.width = '35px';
+            nextPageBtn.style.height = '35px';
+            nextPageBtn.style.padding = '0';
+            nextPageBtn.style.fontSize = '0.9rem';
+            nextPageBtn.onclick = () => changePage(currentPage + 1);
+            nextPageBtn.disabled = (currentPage + 1) * questionsPerPage >= currentQuestions.length;
+            
+            const pageInfo = document.createElement('span');
+            pageInfo.className = 'btn btn-light';
+            pageInfo.textContent = `Page ${currentPage + 1}/${Math.ceil(currentQuestions.length/questionsPerPage)}`;
+            
+            pageNav.appendChild(prevPageBtn);
+            pageNav.appendChild(pageInfo);
+            pageNav.appendChild(nextPageBtn);
+            nav.appendChild(pageNav);
+            
+            // Show first question of new page
+            showQuestion(startIdx);
+        }
+
         function showQuestion(index) {
+            if (index < 0 || index >= currentQuestions.length) {
+                return;
+            }
+            
+            // Update page if necessary
+            const targetPage = Math.floor(index / questionsPerPage);
+            if (targetPage !== currentPage) {
+                changePage(targetPage);
+                return;
+            }
+            
             currentQuestionIndex = index;
             const question = currentQuestions[index];
             
@@ -444,14 +569,18 @@
             });
             
             // Update navigation buttons highlighting
-            const navButtons = document.querySelectorAll('.question-nav button');
+            const navButtons = document.querySelectorAll('.question-nav button:not(.btn-secondary):not(.btn-light)');
             navButtons.forEach((btn, i) => {
+                const questionIndex = currentPage * questionsPerPage + i;
                 btn.classList.remove('current');
-                if (userAnswers.hasOwnProperty(i)) {
+                if (userAnswers.hasOwnProperty(questionIndex)) {
                     btn.classList.add('nav-answered');
                 }
             });
-            navButtons[index].classList.add('current');
+            const currentBtn = navButtons[index % questionsPerPage];
+            if (currentBtn) {
+                currentBtn.classList.add('current');
+            }
             
             updateNavigationButtons();
         }
@@ -460,8 +589,11 @@
             userAnswers[currentQuestionIndex] = answer;
             
             // Update navigation button style
-            const navButtons = document.querySelectorAll('.question-nav button');
-            navButtons[currentQuestionIndex].classList.add('nav-answered');
+            const navButtons = document.querySelectorAll('.question-nav button:not(.btn-secondary):not(.btn-light)');
+            const buttonIndex = currentQuestionIndex % questionsPerPage;
+            if (navButtons[buttonIndex]) {
+                navButtons[buttonIndex].classList.add('nav-answered');
+            }
             
             // Update option buttons
             const options = document.querySelectorAll('#options button');
@@ -767,14 +899,58 @@
             
             if (confirm('Are you sure you want to finish the test?')) {
                 try {
-                    const response = await fetch('/finish-test', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ answers: userAnswers })
-                    });
-                    const results = await response.json();
-                    showResults(results);
+                    // Ensure we have all answers properly collected
+                    const finalAnswers = {};
+                    for (let i = 0; i < currentQuestions.length; i++) {
+                        if (userAnswers.hasOwnProperty(i)) {
+                            finalAnswers[i] = userAnswers[i];
+                        }
+                    }
+
+                    // Split answers into chunks if too many questions
+                    const chunks = [];
+                    const chunkSize = 20; // Process 20 answers at a time
+                    const entries = Object.entries(finalAnswers);
+                    
+                    for (let i = 0; i < entries.length; i += chunkSize) {
+                        const chunk = Object.fromEntries(entries.slice(i, i + chunkSize));
+                        chunks.push(chunk);
+                    }
+
+                    let allResults = null;
+                    
+                    // Submit chunks sequentially
+                    for (let i = 0; i < chunks.length; i++) {
+                        const response = await fetch('/finish-test', {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'X-Chunk-Index': i,
+                                'X-Total-Chunks': chunks.length
+                            },
+                            body: JSON.stringify({ 
+                                answers: chunks[i],
+                                isPartial: i < chunks.length - 1
+                            })
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`Failed to submit chunk ${i + 1} of ${chunks.length}`);
+                        }
+                        
+                        const chunkResult = await response.json();
+                        if (i === chunks.length - 1) {
+                            allResults = chunkResult;
+                        }
+                    }
+                    
+                    if (allResults && allResults.questions) {
+                        showResults(allResults);
+                    } else {
+                        throw new Error('Invalid response format');
+                    }
                 } catch (error) {
+                    console.error('Submission error:', error);
                     alert('Error submitting test: ' + error.message);
                 }
             }

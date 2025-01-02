@@ -235,8 +235,25 @@ def submit_answer():
 def finish_test():
     try:
         data = request.get_json()
-        user_answers = data.get('answers', {})
+        chunk_answers = data.get('answers', {})
+        is_partial = data.get('isPartial', False)
+        chunk_index = request.headers.get('X-Chunk-Index')
+        total_chunks = request.headers.get('X-Total-Chunks')
         
+        # Initialize or get the accumulated answers
+        if 'accumulated_answers' not in session:
+            session['accumulated_answers'] = {}
+        
+        # Update accumulated answers with this chunk
+        accumulated_answers = dict(session['accumulated_answers'])
+        accumulated_answers.update(chunk_answers)
+        session['accumulated_answers'] = accumulated_answers
+        
+        # If this is a partial submission, just acknowledge receipt
+        if is_partial:
+            return jsonify({'success': True, 'message': f'Received chunk {chunk_index} of {total_chunks}'})
+        
+        # Process final submission
         # Get questions from session
         questions = session.get('questions', [])
         if not questions:
@@ -247,42 +264,52 @@ def finish_test():
         duration = time.time() - start_time if start_time else 0
         
         # Get difficulty level from session
-        difficulty = session.get('difficulty', 'medium')  # Default to medium if not specified
+        difficulty = session.get('difficulty', 'medium')
         
-        # Process results
-        correct_answers = 0
+        # Process all accumulated answers
+        correct_count = 0
         processed_questions = []
         
         for i, question in enumerate(questions):
-            user_answer = user_answers.get(str(i))
-            is_correct = user_answer == question['correct_answer']
-            if is_correct:
-                correct_answers += 1
-                
-            processed_questions.append({
+            user_answer = accumulated_answers.get(str(i))  # Convert index to string to match keys
+            is_correct = False
+            
+            if user_answer:
+                # Check if the answer is correct
+                is_correct = user_answer == question['correct_answer']
+                if is_correct:
+                    correct_count += 1
+            
+            # Add processed question data
+            processed_question = {
                 'question': question['question'],
                 'options': question['options'],
                 'user_answer': user_answer,
                 'correct_answer': question['correct_answer'],
                 'is_correct': is_correct
-            })
+            }
+            processed_questions.append(processed_question)
         
+        # Prepare results
         results = {
             'total_questions': len(questions),
-            'correct_answers': correct_answers,
-            'duration': duration,
+            'correct_answers': correct_count,
             'questions': processed_questions,
-            'difficulty': difficulty  # Include difficulty in results
+            'duration': duration,
+            'difficulty': difficulty
         }
         
-        # Clear session
+        # Clear session data
+        session.pop('accumulated_answers', None)
         session.pop('questions', None)
         session.pop('start_time', None)
-        session.pop('difficulty', None)
+        session.pop('answers', None)
         
         return jsonify(results)
+        
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        logger.error(f"Error in finish_test: {str(e)}", exc_info=True)
+        return jsonify({'error': str(e)}), 400
 
 @app.route('/progress/<queue_id>')
 def progress(queue_id):
