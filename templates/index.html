@@ -388,6 +388,7 @@
             currentQuestionIndex = 0;
             currentPage = 0;
             userAnswers = {};  // Reset answers at start
+            currentDifficulty = document.getElementById('difficulty').value;
             
             // Setup timer
             startTime = new Date();
@@ -449,30 +450,6 @@
 
             // Show first question immediately
             showQuestion(startIdx);
-
-            // Then get any existing answers from server
-            fetch('/get-answers', {
-                method: 'GET'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.answers && Object.keys(data.answers).length > 0) {
-                    userAnswers = data.answers;
-                    // Refresh the current question display with any existing answer
-                    showQuestion(currentQuestionIndex);
-                    // Update navigation buttons for existing answers
-                    const navButtons = document.querySelectorAll('.question-nav button:not(.btn-secondary):not(.btn-light)');
-                    Object.keys(userAnswers).forEach(index => {
-                        const buttonIndex = index % questionsPerPage;
-                        if (Math.floor(index / questionsPerPage) === currentPage && navButtons[buttonIndex]) {
-                            navButtons[buttonIndex].classList.add('nav-answered');
-                        }
-                    });
-                }
-            })
-            .catch(error => {
-                console.error('Error getting answers:', error);
-            });
         }
 
         function changePage(newPage) {
@@ -604,24 +581,8 @@
                 }
             });
 
-            // Submit answer to server
-            fetch('/submit-answer', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    questionIndex: currentQuestionIndex,
-                    answer: answer
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (!data.success) {
-                    console.error('Failed to save answer:', data.error);
-                }
-            })
-            .catch(error => {
-                console.error('Error submitting answer:', error);
-            });
+            // Save to localStorage as backup
+            localStorage.setItem('mcq_answers', JSON.stringify(userAnswers));
         }
 
         function updateNavigationButtons() {
@@ -847,25 +808,12 @@
             document.getElementById('preview-estimated-time').textContent = estimatedMinutes;
         }
 
-        document.getElementById('start-test-btn').addEventListener('click', async () => {
+        document.getElementById('start-test-btn').addEventListener('click', () => {
             try {
-                const startResponse = await fetch('/start-test', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        questions: generatedQuestions.questions || generatedQuestions,
-                        difficulty: document.getElementById('difficulty').value
-                    })
-                });
-                
-                if (!startResponse.ok) {
-                    const errorData = await startResponse.json();
-                    throw new Error(errorData.error || 'Failed to start test');
-                }
-                
-                const testData = await startResponse.json();
+                // Start test directly with the generated questions
+                const questions = generatedQuestions.questions || generatedQuestions;
                 document.getElementById('preview-section').classList.add('hidden');
-                startTest(testData.questions);
+                startTest(questions);
             } catch (error) {
                 alert('Error starting test: ' + error.message);
             }
@@ -891,7 +839,7 @@
             }
         });
 
-        document.getElementById('finish-test').addEventListener('click', async () => {
+        document.getElementById('finish-test').addEventListener('click', () => {
             if (Object.keys(userAnswers).length === 0) {
                 alert('Please answer at least one question before finishing the test.');
                 return;
@@ -899,59 +847,12 @@
             
             if (confirm('Are you sure you want to finish the test?')) {
                 try {
-                    // Ensure we have all answers properly collected
-                    const finalAnswers = {};
-                    for (let i = 0; i < currentQuestions.length; i++) {
-                        if (userAnswers.hasOwnProperty(i)) {
-                            finalAnswers[i] = userAnswers[i];
-                        }
-                    }
-
-                    // Split answers into chunks if too many questions
-                    const chunks = [];
-                    const chunkSize = 20; // Process 20 answers at a time
-                    const entries = Object.entries(finalAnswers);
-                    
-                    for (let i = 0; i < entries.length; i += chunkSize) {
-                        const chunk = Object.fromEntries(entries.slice(i, i + chunkSize));
-                        chunks.push(chunk);
-                    }
-
-                    let allResults = null;
-                    
-                    // Submit chunks sequentially
-                    for (let i = 0; i < chunks.length; i++) {
-                        const response = await fetch('/finish-test', {
-                            method: 'POST',
-                            headers: { 
-                                'Content-Type': 'application/json',
-                                'X-Chunk-Index': i,
-                                'X-Total-Chunks': chunks.length
-                            },
-                            body: JSON.stringify({ 
-                                answers: chunks[i],
-                                isPartial: i < chunks.length - 1
-                            })
-                        });
-                        
-                        if (!response.ok) {
-                            throw new Error(`Failed to submit chunk ${i + 1} of ${chunks.length}`);
-                        }
-                        
-                        const chunkResult = await response.json();
-                        if (i === chunks.length - 1) {
-                            allResults = chunkResult;
-                        }
-                    }
-                    
-                    if (allResults && allResults.questions) {
-                        showResults(allResults);
-                    } else {
-                        throw new Error('Invalid response format');
-                    }
+                    // Calculate results client-side
+                    const results = checkAnswers(currentQuestions);
+                    showResults(results);
                 } catch (error) {
-                    console.error('Submission error:', error);
-                    alert('Error submitting test: ' + error.message);
+                    console.error('Error processing results:', error);
+                    alert('Error processing results: ' + error.message);
                 }
             }
         });
@@ -985,6 +886,136 @@
 
         // Add event listener for download results button
         document.getElementById('download-results').addEventListener('click', downloadResults);
+
+        // Add these functions for client-side answer checking
+        function checkAnswers(questions) {
+            const results = {
+                total_questions: questions.length,
+                correct_answers: 0,
+                questions: [],
+                duration: calculateDuration(),
+                difficulty: currentDifficulty
+            };
+            
+            questions.forEach((question, index) => {
+                const userAnswer = userAnswers[index];
+                const isCorrect = userAnswer === question.correct_answer;
+                
+                if (isCorrect) {
+                    results.correct_answers++;
+                }
+                
+                results.questions.push({
+                    question: question.question,
+                    options: question.options,
+                    user_answer: userAnswer,
+                    correct_answer: question.correct_answer,
+                    is_correct: isCorrect
+                });
+            });
+            
+            return results;
+        }
+
+        function calculateDuration() {
+            return Math.floor((Date.now() - startTime) / 1000);
+        }
+
+        // Replace the existing submitTest function with this new version
+        async function submitTest() {
+            if (!currentQuestions || currentQuestions.length === 0) {
+                showError('No test in progress');
+                return;
+            }
+
+            const submitButton = document.getElementById('submit-test');
+            submitButton.disabled = true;
+            
+            try {
+                // Calculate results client-side
+                const results = checkAnswers(currentQuestions);
+                
+                // Display results
+                displayResults(results);
+                
+                // Clear test state
+                userAnswers = {};
+                localStorage.removeItem('mcq_answers');
+                currentQuestions = null;
+                startTime = null;
+                
+                // Hide test interface
+                document.getElementById('test-interface').classList.add('hidden');
+                document.getElementById('results-section').classList.remove('hidden');
+                
+                // Stop and hide timer
+                clearInterval(timerInterval);
+                document.getElementById('timer').classList.add('hidden');
+                
+            } catch (error) {
+                showError('Error processing results: ' + error.message);
+                submitButton.disabled = false;
+            }
+        }
+
+        // Update the displayResults function to handle the new format
+        function displayResults(results) {
+            const resultsDiv = document.getElementById('results-section');
+            const summaryDiv = document.getElementById('results-summary');
+            const detailsDiv = document.getElementById('results-details');
+            
+            // Calculate percentage
+            const percentage = ((results.correct_answers / results.total_questions) * 100).toFixed(2);
+            
+            // Format duration
+            const duration = formatDuration(results.duration);
+            
+            // Update summary
+            summaryDiv.innerHTML = `
+                <h3 class="mb-4">Test Results</h3>
+                <div class="alert alert-info">
+                    <p><strong>Score:</strong> ${results.correct_answers}/${results.total_questions} (${percentage}%)</p>
+                    <p><strong>Time Taken:</strong> ${duration}</p>
+                    <p><strong>Difficulty:</strong> ${results.difficulty}</p>
+                </div>
+            `;
+            
+            // Update details
+            detailsDiv.innerHTML = '<h4 class="mb-3">Detailed Review</h4>';
+            results.questions.forEach((q, index) => {
+                const questionDiv = document.createElement('div');
+                questionDiv.className = `card mb-3 ${q.is_correct ? 'border-success' : 'border-danger'}`;
+                
+                questionDiv.innerHTML = `
+                    <div class="card-header ${q.is_correct ? 'bg-success text-white' : 'bg-danger text-white'}">
+                        Question ${index + 1} - ${q.is_correct ? 'Correct' : 'Incorrect'}
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text"><strong>Q:</strong> ${q.question}</p>
+                        <div class="options-review">
+                            ${Object.entries(q.options).map(([key, value]) => `
+                                <div class="option ${key === q.correct_answer ? 'text-success' : ''} ${key === q.user_answer && key !== q.correct_answer ? 'text-danger' : ''}">
+                                    ${key}) ${value}
+                                    ${key === q.correct_answer ? ' ✓' : ''}
+                                    ${key === q.user_answer && key !== q.correct_answer ? ' ✗' : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                        ${!q.is_correct ? `
+                            <div class="mt-2">
+                                <strong>Your answer:</strong> ${q.user_answer || 'Not answered'}<br>
+                                <strong>Correct answer:</strong> ${q.correct_answer}
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                detailsDiv.appendChild(questionDiv);
+            });
+            
+            // Show results section
+            resultsDiv.classList.remove('hidden');
+        }
     </script>
 </body>
 </html> 
