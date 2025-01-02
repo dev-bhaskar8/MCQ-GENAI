@@ -81,6 +81,18 @@
             font-size: 0.9rem;
         }
 
+        .question-nav button.nav-answered {
+            background-color: #28a745;
+            color: white;
+            border-color: #28a745;
+        }
+
+        .question-nav button.current {
+            background-color: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
         /* Options styling */
         #options button {
             text-align: left;
@@ -430,6 +442,16 @@
                 button.onclick = () => selectAnswer(key);
                 optionsDiv.appendChild(button);
             });
+            
+            // Update navigation buttons highlighting
+            const navButtons = document.querySelectorAll('.question-nav button');
+            navButtons.forEach((btn, i) => {
+                btn.classList.remove('current');
+                if (userAnswers.hasOwnProperty(i)) {
+                    btn.classList.add('nav-answered');
+                }
+            });
+            navButtons[index].classList.add('current');
             
             updateNavigationButtons();
         }
