@@ -5,7 +5,7 @@ import queue
 import threading
 import logging
 from threading import Lock
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 import os
 from werkzeug.utils import secure_filename
@@ -21,6 +21,30 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Global rate limiting
+REQUESTS_PER_MINUTE = 10
+request_timestamps = []
+rate_limit_lock = Lock()
+
+def check_rate_limit():
+    """Check if we can proceed with the request or need to wait.
+    Returns (can_proceed, wait_time_seconds)"""
+    with rate_limit_lock:
+        now = datetime.now()
+        # Remove timestamps older than 1 minute
+        global request_timestamps
+        request_timestamps = [ts for ts in request_timestamps if now - ts < timedelta(minutes=1)]
+        
+        # If we haven't hit the limit, add timestamp and proceed
+        if len(request_timestamps) < REQUESTS_PER_MINUTE:
+            request_timestamps.append(now)
+            return True, 0
+        
+        # Calculate wait time if we've hit the limit
+        oldest_timestamp = request_timestamps[0]
+        wait_time = 61 - (now - oldest_timestamp).total_seconds()  # 61 to be safe
+        return False, max(0, wait_time)
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'  # Required for session management
@@ -116,6 +140,13 @@ def index():
 @app.route('/generate', methods=['POST'])
 def generate():
     try:
+        # Check rate limit first
+        can_proceed, wait_time = check_rate_limit()
+        if not can_proceed:
+            return jsonify({
+                'error': f'Rate limit reached. Please wait {int(wait_time)} seconds before trying again.'
+            }), 429
+            
         # Check master password
         master_password = os.getenv('MASTER_PASSWORD')
         provided_password = request.form.get('master_password')

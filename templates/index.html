@@ -280,7 +280,7 @@
                 <div id="status" class="alert alert-info"></div>
             </div>
             <div class="footer">
-                Made with <span class="heart">💙</span> by V
+                Made with <span class="heart">💙</span> by V for U
             </div>
         </div>
 
@@ -313,7 +313,8 @@
         <!-- Test Section -->
         <div id="test-section" class="hidden">
             <div id="timer" class="mb-3">
-                Time: <span id="time-display">00:00</span>
+                <div>Time: <span id="time-display">00:00</span></div>
+                <div>Questions attempted: <span id="questions-attempted">0/0</span></div>
             </div>
             <div class="question-nav mb-4"></div>
             <div id="question-display" class="mb-4">
@@ -351,7 +352,7 @@
                 <button id="restart" class="btn btn-primary">Go Back to Homepage</button>
             </div>
             <div class="footer">
-                Made with <span class="heart">💙</span> by V
+                Made with <span class="heart">💙</span> by V for U
             </div>
         </div>
     </div>
@@ -393,6 +394,9 @@
             // Setup timer
             startTime = new Date();
             timerInterval = setInterval(updateTimer, 1000);
+            
+            // Initialize questions attempted counter
+            document.getElementById('questions-attempted').textContent = `0/${questions.length}`;
             
             // Setup question navigation
             const nav = document.querySelector('.question-nav');
@@ -466,6 +470,9 @@
             
             // Only show buttons for current page
             const endIdx = Math.min(startIdx + questionsPerPage, currentQuestions.length);
+            
+            // Update questions attempted counter
+            document.getElementById('questions-attempted').textContent = `${Object.keys(userAnswers).length}/${currentQuestions.length}`;
             
             for (let i = startIdx; i < endIdx; i++) {
                 const btn = document.createElement('button');
@@ -564,6 +571,9 @@
 
         function selectAnswer(answer) {
             userAnswers[currentQuestionIndex] = answer;
+            
+            // Update questions attempted counter
+            document.getElementById('questions-attempted').textContent = `${Object.keys(userAnswers).length}/${currentQuestions.length}`;
             
             // Update navigation button style
             const navButtons = document.querySelectorAll('.question-nav button:not(.btn-secondary):not(.btn-light)');
