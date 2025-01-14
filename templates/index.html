@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>MCQ Generator</title>
     <link rel="manifest" href="/static/manifest.json">
     <meta name="theme-color" content="#0d6efd">
@@ -15,6 +18,23 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
     <style>
         .hidden { display: none; }
+        
+        /* Loading message styles */
+        #loading-message {
+            flex: 1;
+            max-width: 400px;
+            line-height: 1.4;
+        }
+        
+        @media (max-width: 768px) {
+            .d-flex.align-items-center.gap-3 {
+                flex-direction: column;
+                align-items: flex-start !important;
+            }
+            #loading-message {
+                margin-top: 0.5rem;
+            }
+        }
         
         /* Notification styles */
         .overlay {
@@ -370,7 +390,12 @@
                     </select>
                 </div>
 
-                <button type="submit" class="btn btn-primary" id="generate-btn">Generate Questions</button>
+                <div class="d-flex align-items-center gap-3">
+                    <button type="submit" class="btn btn-primary" id="generate-btn">Generate Questions</button>
+                    <div id="loading-message" class="text-muted small" style="display: none;">
+                        It takes about a minute to start for the first time in a while - a small compromise to keep this service free forever 💙
+                    </div>
+                </div>
             </form>
             <div id="progress" class="hidden">
                 <div class="progress mb-3">
@@ -461,6 +486,29 @@
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
+                // Clear any stored data
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // Reset all variables
+                currentQuestions = [];
+                currentQuestionIndex = 0;
+                userAnswers = {};
+                startTime = null;
+                timerInterval = null;
+                generatedQuestions = null;
+                lastQuestions = null;
+                lastResults = null;
+                currentPage = 0;
+                
+                // Unregister existing service workers to prevent caching
+                navigator.serviceWorker.getRegistrations().then(function(registrations) {
+                    for(let registration of registrations) {
+                        registration.unregister();
+                    }
+                });
+                
+                // Register new service worker
                 navigator.serviceWorker.register('/service-worker.js', {
                     scope: '/'
                 })
@@ -838,10 +886,12 @@
         document.getElementById('url-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            // Disable button and change text
+            // Show loading message and disable button
             const generateBtn = document.getElementById('generate-btn');
+            const loadingMessage = document.getElementById('loading-message');
             generateBtn.disabled = true;
             generateBtn.textContent = 'Loading...';
+            loadingMessage.style.display = 'block';
             
             const form = e.target;
             const inputMethod = form.querySelector('input[name="input_method"]:checked').value;
@@ -901,12 +951,14 @@
                         // Re-enable button and restore text
                         generateBtn.disabled = false;
                         generateBtn.textContent = 'Generate Questions';
+                        loadingMessage.style.display = 'none';
                     }
                     if (progress.error) {
                         eventSource.close();
                         // Re-enable button and restore text on error
                         generateBtn.disabled = false;
                         generateBtn.textContent = 'Generate Questions';
+                        loadingMessage.style.display = 'none';
                         throw new Error(progress.error);
                     }
                 };
@@ -916,6 +968,7 @@
                 // Re-enable button and restore text on error
                 generateBtn.disabled = false;
                 generateBtn.textContent = 'Generate Questions';
+                loadingMessage.style.display = 'none';
             }
         });
 
