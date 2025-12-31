@@ -154,7 +154,7 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         }
 
         model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash-exp",
+            model_name="gemini-3-flash-preview",
             generation_config=generation_config,
         )
 
