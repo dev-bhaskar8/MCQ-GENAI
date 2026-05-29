@@ -20,7 +20,7 @@ load_dotenv()
 # Rate limiting settings
 REQUESTS_PER_MINUTE = 10  # Setting to 10 RPM
 request_timestamps = []
-DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.2-3b-instruct:free"
+DEFAULT_OPENROUTER_MODEL = "deepseek/deepseek-v4-flash:free"
 
 def wait_for_rate_limit():
     """Wait if necessary to comply with rate limits."""
