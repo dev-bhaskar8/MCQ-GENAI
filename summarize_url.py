@@ -20,6 +20,7 @@ load_dotenv()
 # Rate limiting settings
 REQUESTS_PER_MINUTE = 10  # Setting to 10 RPM
 request_timestamps = []
+DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
 
 def wait_for_rate_limit():
     """Wait if necessary to comply with rate limits."""
@@ -127,15 +128,68 @@ def validate_api_key(api_key):
         return False, "Error: Invalid API key format. Gemini API keys should start with 'AI'"
     return True, None
 
-def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', progress_queue=None):
-    """Generate MCQs with batch size optimized for flash model's 8k token limit."""
+def get_ai_provider():
+    provider = os.getenv("AI_PROVIDER")
+    if provider:
+        return provider.lower()
+    if os.getenv("OPENROUTER_API_KEY"):
+        return "openrouter"
+    return "gemini"
+
+def generate_gemini_response(prompt):
     api_key = os.getenv("GEMINI_API_KEY")
-    
-    # Validate API key
     is_valid, error_msg = validate_api_key(api_key)
     if not is_valid:
-        return error_msg
-    
+        raise RuntimeError(error_msg)
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
+        generation_config={
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "top_k": 40,
+            "max_output_tokens": 4096,
+        },
+    )
+    return model.generate_content(prompt).text
+
+def generate_openrouter_response(prompt):
+    api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise RuntimeError("Error: OPENROUTER_API_KEY not found")
+
+    response = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": os.getenv("APP_URL", "https://mcq-genai.onrender.com"),
+            "X-Title": "MCQ Gen AI",
+        },
+        json={
+            "model": os.getenv("OPENROUTER_MODEL", DEFAULT_OPENROUTER_MODEL),
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "max_tokens": 4096,
+        },
+        timeout=90,
+    )
+    response.raise_for_status()
+    data = response.json()
+    return data["choices"][0]["message"]["content"]
+
+def generate_ai_response(prompt):
+    provider = get_ai_provider()
+    if provider == "openrouter":
+        return generate_openrouter_response(prompt)
+    if provider == "gemini":
+        return generate_gemini_response(prompt)
+    raise RuntimeError(f"Error: Unsupported AI_PROVIDER '{provider}'")
+
+def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', progress_queue=None):
+    """Generate MCQs with batch size optimized for flash model's 8k token limit."""
     # Handle rate limiting
     wait_time = wait_for_rate_limit()
     if wait_time > 0:
@@ -144,20 +198,6 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         time.sleep(wait_time)
     
     try:
-        genai.configure(api_key=api_key)
-
-        generation_config = {
-            "temperature": 0.7,
-            "top_p": 0.95,
-            "top_k": 40,
-            "max_output_tokens": 4096,
-        }
-
-        model = genai.GenerativeModel(
-            model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
-            generation_config=generation_config,
-        )
-
         # Split content into smaller chunks if it's too long
         content_words = content.split()
         max_words = 1200
@@ -264,8 +304,7 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         # Record this request
         request_timestamps.append(datetime.now())
         
-        response = model.generate_content(prompt)
-        response_text = response.text
+        response_text = generate_ai_response(prompt)
         
         # Try to parse the direct response first
         try:
@@ -292,9 +331,9 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
             {response_text}
             Format as pure JSON array only."""
             
-            response_retry = model.generate_content(prompt_retry)
+            response_retry = generate_ai_response(prompt_retry)
             try:
-                questions = json.loads(response_retry.text)
+                questions = json.loads(response_retry)
                 if len(questions) == batch_size:
                     return questions
                 raise ValueError(f"Expected {batch_size} questions, got {len(questions)}")
@@ -305,7 +344,7 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         if "429" in error_msg or "quota" in error_msg.lower():
             return "Error: API rate limit reached. Please try again in a minute."
         elif "invalid_api_key" in error_msg.lower() or "unauthorized" in error_msg.lower():
-            return "Error: Invalid API key. Please check your GEMINI_API_KEY in the .env file."
+            return "Error: Invalid API key. Please check your AI provider key in the environment variables."
         elif "permission_denied" in error_msg.lower():
             return "Error: Permission denied. Please make sure your API key has the necessary permissions."
         return f"Error generating MCQs batch {start_num//batch_size + 1}: {error_msg}"
@@ -349,9 +388,8 @@ def generate_all_mcqs(content, total_questions=25, batch_size=5, difficulty='med
             if isinstance(batch_questions, str):  # Error occurred
                 error_msg = batch_questions
                 if "rate limit" in error_msg.lower():
-                    # If we hit rate limit, use exponential backoff
-                    retry_wait = 15
-                    max_retries = 3
+                    retry_wait = 10
+                    max_retries = 1
                     
                     for retry in range(max_retries):
                         retry_message = f'Rate limit hit. Waiting {retry_wait} seconds before retry {retry + 1}/{max_retries}...'
@@ -365,7 +403,8 @@ def generate_all_mcqs(content, total_questions=25, batch_size=5, difficulty='med
                         if not isinstance(batch_questions, str):  # Success
                             break
                     
-                    if isinstance(batch_questions, str):  # Still failed after retries
+                    if isinstance(batch_questions, str):  # Still failed after retry
+                        batch_questions = "Error: The AI provider is rate-limiting requests right now. Please wait a few minutes and try again."
                         if progress_queue:
                             progress_queue.put(('error', batch_questions))
                         return batch_questions
