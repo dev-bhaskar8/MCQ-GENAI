@@ -8,6 +8,7 @@ from threading import Lock
 from datetime import datetime, timedelta
 import time
 import os
+import uuid
 from werkzeug.utils import secure_filename
 import gc
 
@@ -205,7 +206,7 @@ def generate():
             return jsonify({'error': content})
         
         # Create a unique queue ID
-        queue_id = str(threading.get_ident())
+        queue_id = uuid.uuid4().hex
         logger.info(f"Created queue_id: {queue_id}")
         
         with queue_lock:

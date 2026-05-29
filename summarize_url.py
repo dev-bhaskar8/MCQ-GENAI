@@ -94,9 +94,9 @@ def fetch_url_content(url):
         text = text.strip()
         if len(text) < 100:
             raise ValueError("Extracted content seems too short (less than 100 characters)")
-        if len(text) > 100000:
-            text = text[:100000]
-            print("Warning: Content truncated to 100,000 characters")
+        if len(text) > 30000:
+            text = text[:30000]
+            print("Warning: Content truncated to 30,000 characters")
             
         return text
     except requests.Timeout:
@@ -150,17 +150,17 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
             "temperature": 0.7,
             "top_p": 0.95,
             "top_k": 40,
-            "max_output_tokens": 8192,  # Maximum allowed for flash model (must be less than 8193)
+            "max_output_tokens": 4096,
         }
 
         model = genai.GenerativeModel(
-            model_name="gemini-3-flash-preview",
+            model_name=os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite"),
             generation_config=generation_config,
         )
 
         # Split content into smaller chunks if it's too long
         content_words = content.split()
-        max_words = 2000  # Reduced for flash model's 8k token limit
+        max_words = 1200
         if len(content_words) > max_words:
             content = ' '.join(content_words[:max_words])
 
