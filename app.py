@@ -135,7 +135,7 @@ def allowed_file(filename):
 
 @app.route('/')
 def index():
-    return render_template('index.html', default_questions=25)
+    return render_template('index.html', default_questions=5)
 
 @app.route('/privacy-policy')
 def privacy_policy():
@@ -160,7 +160,7 @@ def generate():
         # if not provided_password or provided_password != master_password:
         #     return jsonify({'error': 'Invalid master password'}), 403
             
-        num_questions = int(request.form.get('num_questions', 25))
+        num_questions = int(request.form.get('num_questions', 5))
         difficulty = request.form.get('difficulty', 'medium')
         input_method = request.form.get('input_method', 'url')
         
