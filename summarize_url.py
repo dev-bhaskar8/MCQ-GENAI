@@ -20,7 +20,7 @@ load_dotenv()
 # Rate limiting settings
 REQUESTS_PER_MINUTE = 10  # Setting to 10 RPM
 request_timestamps = []
-DEFAULT_OPENROUTER_MODEL = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free"
+DEFAULT_OPENROUTER_MODEL = "meta-llama/llama-3.2-3b-instruct:free"
 
 def wait_for_rate_limit():
     """Wait if necessary to comply with rate limits."""
@@ -172,16 +172,18 @@ def generate_openrouter_response(prompt):
             "messages": [{"role": "user", "content": prompt}],
             "temperature": 0.7,
             "top_p": 0.95,
-            "max_tokens": 4096,
+            "max_tokens": 2048,
         },
-        timeout=90,
+        timeout=30,
     )
     response.raise_for_status()
     data = response.json()
     return data["choices"][0]["message"]["content"]
 
-def generate_ai_response(prompt):
+def generate_ai_response(prompt, progress_queue=None):
     provider = get_ai_provider()
+    if progress_queue:
+        progress_queue.put(('status', f'Waiting for {provider} response...'))
     if provider == "openrouter":
         return generate_openrouter_response(prompt)
     if provider == "gemini":
@@ -200,7 +202,7 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
     try:
         # Split content into smaller chunks if it's too long
         content_words = content.split()
-        max_words = 1200
+        max_words = 700
         if len(content_words) > max_words:
             content = ' '.join(content_words[:max_words])
 
@@ -304,7 +306,7 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
         # Record this request
         request_timestamps.append(datetime.now())
         
-        response_text = generate_ai_response(prompt)
+        response_text = generate_ai_response(prompt, progress_queue)
         
         # Try to parse the direct response first
         try:
@@ -331,7 +333,7 @@ def generate_mcqs_batch(content, start_num, batch_size=5, difficulty='medium', p
             {response_text}
             Format as pure JSON array only."""
             
-            response_retry = generate_ai_response(prompt_retry)
+            response_retry = generate_ai_response(prompt_retry, progress_queue)
             try:
                 questions = json.loads(response_retry)
                 if len(questions) == batch_size:
